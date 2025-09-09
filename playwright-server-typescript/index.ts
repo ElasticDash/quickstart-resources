@@ -24,7 +24,7 @@ import type { BrowserContext } from 'playwright';
 import type { BrowserContextFactory } from './browser/browserContextFactory';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
-import packageJSON from './package.json';
+const packageJSON = require('./package.json');
 
 export async function createConnection(userConfig: Config = {}, contextGetter?: () => Promise<BrowserContext>): Promise<Server> {
   const config = await resolveConfig(userConfig);
