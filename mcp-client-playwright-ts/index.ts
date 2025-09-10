@@ -6,8 +6,9 @@ import {
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import path from "path";
 import readline from "readline/promises";
-
+import fs from "fs";
 import dotenv from "dotenv";
 
 dotenv.config(); // load environment variables from .env
@@ -39,7 +40,8 @@ class MCPClient {
       // Use npx to launch playwright-mcp
       this.transport = new StdioClientTransport({
         command: 'npx',
-        args: ["@playwright/mcp@latest"]
+        args: ["@playwright/mcp@latest"],
+        cwd: path.resolve(__dirname, '..', '..') // This sets cwd to the repo root
       });
       this.mcp.connect(this.transport);
 
@@ -175,9 +177,24 @@ class MCPClient {
 
 async function main() {
   const mcpClient = new MCPClient();
+
+  // Check for a prompt file argument
+  const promptFile = process.argv[2];
+  let prompt: string | undefined = undefined;
+  if (promptFile) {
+    prompt = fs.readFileSync(promptFile, "utf-8");
+  }
+
   try {
     await mcpClient.connectToServer();
-    await mcpClient.chatLoop();
+    if (prompt) {
+      // Use the file content as the prompt
+      const response = await mcpClient.processQuery(prompt);
+      console.log("\n" + response);
+    } else {
+      // Fallback to interactive chat
+      await mcpClient.chatLoop();
+    }
   } finally {
     await mcpClient.cleanup();
     process.exit(0);
