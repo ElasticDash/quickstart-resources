@@ -39,7 +39,7 @@ class MCPClient {
       // Use npx to launch playwright-mcp
       this.transport = new StdioClientTransport({
         command: 'npx',
-        args: ['playwright-mcp'],
+        args: ["@playwright/mcp@latest"]
       });
       this.mcp.connect(this.transport);
 
@@ -76,51 +76,63 @@ class MCPClient {
       },
     ];
 
-    // Initial Claude API call
-    const response = await this.anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1000,
-      messages,
-      tools: this.tools,
-    });
-
-    // Process response and handle tool calls
     const finalText = [];
-    const toolResults = [];
+    let continueConversation = true;
 
-    for (const content of response.content) {
-      if (content.type === "text") {
-        finalText.push(content.text);
-      } else if (content.type === "tool_use") {
-        // Execute tool call
-        const toolName = content.name;
-        const toolArgs = content.input as { [x: string]: unknown } | undefined;
+    while (continueConversation) {
+      // Call Claude API
+      const response = await this.anthropic.messages.create({
+        model: "claude-3-5-sonnet-20241022",
+        max_tokens: 1000,
+        messages,
+        tools: this.tools,
+      });
 
-        const result = await this.mcp.callTool({
-          name: toolName,
-          arguments: toolArgs,
-        });
-        toolResults.push(result);
-        finalText.push(
-          `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`,
-        );
+      // Add Claude's response to the conversation
+      messages.push({
+        role: "assistant",
+        content: response.content,
+      });
 
-        // Continue conversation with tool results
+      let hasToolCalls = false;
+      const toolResults = [];
+
+      // Process each content block in Claude's response
+      for (const content of response.content) {
+        if (content.type === "text") {
+          finalText.push(content.text);
+        } else if (content.type === "tool_use") {
+          hasToolCalls = true;
+          const toolName = content.name;
+          const toolArgs = content.input as { [x: string]: unknown } | undefined;
+
+          finalText.push(
+            `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`,
+          );
+
+          // Execute the tool call
+          const result = await this.mcp.callTool({
+            name: toolName,
+            arguments: toolArgs,
+          });
+
+          toolResults.push({
+            type: "tool_result" as const,
+            tool_use_id: content.id,
+            content: result.content as string,
+          });
+        }
+      }
+
+      // If there were tool calls, add their results to the conversation
+      if (hasToolCalls) {
         messages.push({
           role: "user",
-          content: result.content as string,
+          content: toolResults,
         });
-
-        // Get next response from Claude
-        const response = await this.anthropic.messages.create({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 1000,
-          messages,
-        });
-
-        finalText.push(
-          response.content[0].type === "text" ? response.content[0].text : "",
-        );
+      } else {
+        // No tool calls in this response, conversation is complete
+        continueConversation = false;
       }
     }
 
