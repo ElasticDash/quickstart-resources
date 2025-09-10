@@ -31,29 +31,15 @@ class MCPClient {
     this.mcp = new Client({ name: "mcp-client-cli", version: "1.0.0" });
   }
 
-  async connectToServer(serverScriptPath: string) {
+  async connectToServer() {
     /**
-     * Connect to an MCP server
-     *
-     * @param serverScriptPath - Path to the server script (.py or .js)
+     * Connect to the Playwright MCP server using npx
      */
     try {
-      // Determine script type and appropriate command
-      const isJs = serverScriptPath.endsWith(".js");
-      const isPy = serverScriptPath.endsWith(".py");
-      if (!isJs && !isPy) {
-        throw new Error("Server script must be a .js or .py file");
-      }
-      const command = isPy
-        ? process.platform === "win32"
-          ? "python"
-          : "python3"
-        : process.execPath;
-
-      // Initialize transport and connect to server
+      // Use npx to launch playwright-mcp
       this.transport = new StdioClientTransport({
-        command,
-        args: [serverScriptPath],
+        command: 'npx',
+        args: ['playwright-mcp'],
       });
       this.mcp.connect(this.transport);
 
@@ -71,7 +57,7 @@ class MCPClient {
         this.tools.map(({ name }) => name),
       );
     } catch (e) {
-      console.log("Failed to connect to MCP server: ", e);
+      console.log("Failed to connect to Playwright MCP server: ", e);
       throw e;
     }
   }
@@ -176,13 +162,9 @@ class MCPClient {
 }
 
 async function main() {
-  if (process.argv.length < 3) {
-    console.log("Usage: node build/index.js <path_to_server_script>");
-    return;
-  }
   const mcpClient = new MCPClient();
   try {
-    await mcpClient.connectToServer(process.argv[2]);
+    await mcpClient.connectToServer();
     await mcpClient.chatLoop();
   } finally {
     await mcpClient.cleanup();
